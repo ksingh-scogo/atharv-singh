@@ -115,6 +115,10 @@ function check(cond, msg) { if (!cond) { failures++; console.log('  FAIL: ' + ms
   const sharePng = await ev(() => document.getElementById('o-card').toDataURL('image/png').length);
   check(sharePng > 20000, 'share card picture was drawn (' + sharePng + ' chars)');
   check((await ev(() => SC.game.profile.best)) > 0, 'best score saved');
+  check(await ev(() => document.getElementById('o-img').src.startsWith('data:image/png')), 'score card is shown as a picture (press and hold / right-click to save)');
+  await ev(() => { Object.defineProperty(navigator, 'share', { configurable: true, value: () => Promise.reject(Object.assign(new Error('refused'), { name: 'NotAllowedError' })) }); });
+  await page.click('#o-share'); await page.waitForTimeout(400);
+  check((await ev(() => document.getElementById('o-note').textContent)).match(/copied|scored/i) !== null, 'Share falls back to copying the message when the share sheet is refused');
 
   console.log('Boss defeat -> multiplier -> Champion screen');
   await page.click('#o-again'); await page.waitForTimeout(300);

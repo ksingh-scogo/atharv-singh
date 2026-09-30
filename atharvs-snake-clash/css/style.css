@@ -1,5 +1,6 @@
 /* Atharv's Snake Clash - look and feel */
 :root {
+  color-scheme: dark;   /* the game is a deliberate dark, night-sky look */
   --ink: #ffffff;
   --panel: #2e2080;
   --panel-2: #231766;
@@ -221,7 +222,10 @@ html, body {
 .note.good { color: #8dffb8; }
 .note.bad { color: #ffb3c0; }
 .revive-info { font-weight: 800; margin: 8px 0 4px; font-size: clamp(15px, 4vw, 18px); color: #ff9ab8; }
-#o-card { width: min(62vw, 300px); height: auto; border-radius: 18px; box-shadow: 0 8px 26px rgba(0, 0, 0, 0.5); margin: 6px auto; display: block; }
+#o-img {
+  width: min(62vw, 300px); height: auto; border-radius: 18px; box-shadow: 0 8px 26px rgba(0, 0, 0, 0.5); margin: 6px auto; display: block;
+  -webkit-touch-callout: default; -webkit-user-select: auto; user-select: auto;   /* press and hold / right-click to save it */
+}
 
 .noscript { position: fixed; inset: 0; z-index: 99; display: flex; align-items: center; justify-content: center; background: #1d1450; font-size: 22px; text-align: center; padding: 20px; }
 
@@ -252,7 +256,7 @@ html, body {
   .logo .l2 { font-size: 38px; }
   .btn.big { padding: 8px 26px; }
   .big-emoji, .how-art { font-size: 48px; }
-  #o-card { width: 150px; }
+  #o-img { width: 150px; }
 }
 @media (max-width: 420px) {
   .hud-br .school-badge { font-size: 9px; }

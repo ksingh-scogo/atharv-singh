@@ -165,6 +165,7 @@
         $('o-stats').appendChild(d);
       });
       UI.drawCard($('o-card'), m, total);
+      try { $('o-img').src = $('o-card').toDataURL('image/png'); } catch (e) { /* the canvas copy still works for Share */ }
       UI.show('over');
     },
 
@@ -216,25 +217,38 @@
 
     share: function () {
       var cv = $('o-card'), text = UI.shareText(), note = $('o-note');
-      function done(msg) { note.className = 'note good'; note.textContent = msg; }
+      function say(msg, cls) { note.className = 'note ' + (cls || 'good'); note.textContent = msg; }
+      // Phone share sheets can be unavailable or refused (for example inside another page): fall back to copying the message.
+      function copyInstead() {
+        var nav = root.navigator;
+        if (nav.clipboard && nav.clipboard.writeText) {
+          nav.clipboard.writeText(text).then(
+            function () { say('Message copied! Paste it to share. To keep the picture, press and hold it.'); },
+            function () { say(text); });
+        } else say(text);
+      }
+      function tried(err) { if (err && err.name === 'AbortError') return; copyInstead(); }   // AbortError = they closed the sheet
       cv.toBlob(function (blob) {
         var nav = root.navigator, file = null;
         try { file = new root.File([blob], 'atharvs-snake-clash-score.png', { type: 'image/png' }); } catch (e) { file = null; }
-        if (file && nav.canShare && nav.canShare({ files: [file] })) {
-          nav.share({ title: CFG.TITLE, text: text, files: [file] }).catch(function () { /* cancelled */ });
-        } else if (nav.share) {
-          var data = { title: CFG.TITLE, text: text };
-          if (/^https?:/.test(root.location.href)) data.url = root.location.href;
-          nav.share(data).catch(function () { /* cancelled */ });
-        } else {
-          UI.download(blob);
-          if (nav.clipboard && nav.clipboard.writeText) nav.clipboard.writeText(text).then(function () { done('Picture saved and message copied. Paste it to share!'); }, function () { done('Picture saved!'); });
-          else done('Picture saved!');
-        }
+        try {
+          if (file && nav.canShare && nav.canShare({ files: [file] })) {
+            nav.share({ title: CFG.TITLE, text: text, files: [file] }).catch(tried);
+          } else if (nav.share) {
+            var data = { title: CFG.TITLE, text: text };
+            if (/^https?:/.test(root.location.href)) data.url = root.location.href;
+            nav.share(data).catch(tried);
+          } else copyInstead();
+        } catch (e) { copyInstead(); }
       }, 'image/png');
     },
     savePicture: function () {
-      $('o-card').toBlob(function (blob) { UI.download(blob); $('o-note').className = 'note good'; $('o-note').textContent = 'Picture saved!'; }, 'image/png');
+      $('o-card').toBlob(function (blob) {
+        UI.download(blob);
+        // Some pages are not allowed to start downloads, so always say how to save by hand too.
+        var n = $('o-note'); n.className = 'note good';
+        n.textContent = 'Saving your picture... If nothing downloads, press and hold (or right-click) the picture and choose Save image.';
+      }, 'image/png');
     },
     download: function (blob) {
       var a = doc.createElement('a');
