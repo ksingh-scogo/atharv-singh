@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#1d1450">
+  <meta name="description" content="Atharv's Snake Clash - a snake arena game made by Atharv Singh, Podar International School, Nerul.">
+  <title>Atharv's Snake Clash</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='34' r='28' fill='%234cd964'/%3E%3Ccircle cx='22' cy='28' r='7' fill='white'/%3E%3Ccircle cx='42' cy='28' r='7' fill='white'/%3E%3Ccircle cx='24' cy='29' r='3.5' fill='%23222'/%3E%3Ccircle cx='44' cy='29' r='3.5' fill='%23222'/%3E%3Cpath d='M20 44q12 9 24 0' stroke='%23222' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3Cpath d='M16 14l8 8 8-12 8 12 8-8v10H16z' fill='%23ffd23f'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="danger"></div>
+
+  <!-- ============ In-game display ============ -->
+  <div id="hud" class="hidden">
+    <div class="hud-top">
+      <div class="hud-left">
+        <div class="chip score-chip"><span class="lbl">Score</span> <b id="h-score">0</b> <span id="h-mult" class="mult hidden">x2</span></div>
+        <div class="chip-row">
+          <div class="chip"><span class="lbl">Size</span> <b id="h-size">10</b></div>
+          <div class="chip"><span class="lbl">Rank</span> <b id="h-rank">#1</b></div>
+        </div>
+        <div id="h-king" class="chip king-chip hidden">You are the KING!</div>
+      </div>
+      <div class="hud-right">
+        <div class="btns">
+          <button id="b-sound" class="icon-btn" aria-label="Sound on or off">&#128266;</button>
+          <button id="b-pause" class="icon-btn" aria-label="Pause">&#9208;</button>
+        </div>
+        <ol id="h-board" aria-label="Leaderboard"></ol>
+      </div>
+    </div>
+
+    <div id="h-boss" class="boss-bar hidden">
+      <div class="boss-title" id="hb-title"></div>
+      <div class="bar"><div class="fill" id="hb-fill"></div><div class="mark"></div></div>
+      <div class="boss-sub" id="hb-sub"></div>
+    </div>
+
+    <div id="toast"></div>
+    <div id="banner" class="hidden"><div class="b1" id="bn-1"></div><div class="b2" id="bn-2"></div></div>
+
+    <div class="hud-bottom">
+      <canvas id="minimap" width="132" height="132" aria-label="Map"></canvas>
+      <div class="hud-br">
+        <div class="chip lives"><span class="heart">&#10084;&#65039;</span> Revives left: <b id="h-rev">29/29</b></div>
+        <div class="chip stars"><span class="star">&#11088;</span> Bonus points: <b id="h-stars">0</b></div>
+        <div class="school-badge">Podar International School, Nerul</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Screens ============ -->
+  <main id="ui">
+
+    <section id="s-title" class="screen active">
+      <div class="card title-card">
+        <div class="presents">Atharv Singh presents</div>
+        <h1 class="logo"><span class="l1">Atharv's</span><span class="l2">Snake Clash</span></h1>
+        <canvas id="t-snake" width="420" height="120" aria-hidden="true"></canvas>
+        <button class="btn big" id="b-play">&#9654; PLAY</button>
+        <div class="row">
+          <button class="btn small" id="b-custom">&#127912; My Snake</button>
+          <button class="btn small" id="b-how">&#10067; How to Play</button>
+          <button class="btn small" id="b-about">&#11088; About</button>
+        </div>
+        <div class="best" id="t-best"></div>
+        <div class="row toggles">
+          <button class="pill" id="t-sfx">&#128266; Sounds</button>
+          <button class="pill" id="t-music">&#127925; Music</button>
+          <button class="pill hidden" id="t-full">&#9974; Full screen</button>
+        </div>
+        <p class="credit">Made by Atharv Singh, Podar International School, Nerul</p>
+      </div>
+    </section>
+
+    <section id="s-custom" class="screen">
+      <div class="card wide">
+        <h2>My Snake</h2>
+        <div class="cust-top">
+          <canvas id="c-preview" width="340" height="140" aria-hidden="true"></canvas>
+          <label class="name-field">My name
+            <input id="c-name" maxlength="12" autocomplete="off" spellcheck="false">
+          </label>
+        </div>
+        <div id="c-skins" class="skin-grid"></div>
+        <div class="group-title">Legs or no legs?</div>
+        <div class="seg" id="c-legs">
+          <button data-v="1">&#129462; Crawly legs<small>a bit faster, turns tighter</small></button>
+          <button data-v="0">&#128013; Smooth slither<small>grows a bit more</small></button>
+        </div>
+        <div class="group-title">How brave are you?</div>
+        <div class="seg" id="c-diff">
+          <button data-v="easy">&#128578; Easy<small>only the King and Bosses can get you</small></button>
+          <button data-v="brave">&#128170; Brave<small>very big snakes can get you too</small></button>
+        </div>
+        <button class="btn big" id="c-done">&#10004; Done</button>
+      </div>
+    </section>
+
+    <section id="s-how" class="screen">
+      <div class="card">
+        <div class="how-art" id="how-art"></div>
+        <h2 id="how-title"></h2>
+        <p id="how-text"></p>
+        <div class="dots" id="how-dots"></div>
+        <div class="row">
+          <button class="btn small ghost" id="how-skip">Skip</button>
+          <button class="btn" id="how-next">Next &#9654;</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="s-about" class="screen">
+      <div class="card">
+        <h2>About the game</h2>
+        <div class="about-logo">Atharv's Snake Clash</div>
+        <p class="about-line"><b>Game designer and creator</b><br>Atharv Singh</p>
+        <p class="about-line">Class 2<br>Podar International School, Nerul</p>
+        <p class="about-small">Atharv came up with the King, the Bosses, the eggs, the 29 revives and the multiplier bonus.
+          The code was written with help from Claude, an AI assistant.</p>
+        <div class="stat-list" id="a-stats"></div>
+        <button class="btn" id="a-back">&#9664; Back</button>
+      </div>
+    </section>
+
+    <section id="s-pause" class="screen">
+      <div class="card">
+        <h2>Paused</h2>
+        <button class="btn big" id="p-resume">&#9654; Keep playing</button>
+        <div class="row">
+          <button class="btn small" id="p-restart">&#128260; Restart</button>
+          <button class="btn small" id="p-how">&#10067; How to Play</button>
+          <button class="btn small ghost" id="p-quit">&#127968; Home</button>
+        </div>
+        <div class="row toggles">
+          <button class="pill" id="p-sfx">&#128266; Sounds</button>
+          <button class="pill" id="p-music">&#127925; Music</button>
+        </div>
+        <p class="credit">Made by Atharv Singh, Podar International School, Nerul</p>
+      </div>
+    </section>
+
+    <section id="s-death" class="screen">
+      <div class="card">
+        <div class="big-emoji" id="d-emoji">&#128081;</div>
+        <h2 id="d-title">The King got you!</h2>
+        <p id="d-msg"></p>
+        <div class="star-pop hidden" id="d-star">&#11088; +1 Bonus point!</div>
+        <div class="note" id="d-mult"></div>
+        <div class="revive-info" id="d-rev"></div>
+        <button class="btn big" id="d-revive">&#10084;&#65039; Revive!</button>
+        <button class="btn small ghost" id="d-finish">Finish my run</button>
+      </div>
+    </section>
+
+    <section id="s-win" class="screen">
+      <div class="card">
+        <div class="big-emoji">&#127942;</div>
+        <h2>You are the Snake Champion!</h2>
+        <p>You beat all 5 Bosses. Amazing, Atharv!</p>
+        <button class="btn big" id="w-go">&#9654; Keep playing</button>
+        <button class="btn small" id="w-finish">See my score card</button>
+      </div>
+    </section>
+
+    <section id="s-over" class="screen">
+      <div class="card wide">
+        <h2 id="o-title">Great game!</h2>
+        <canvas id="o-card" width="1080" height="1080" aria-label="Your score card"></canvas>
+        <div class="stat-list" id="o-stats"></div>
+        <div class="row">
+          <button class="btn" id="o-share">&#128228; Share</button>
+          <button class="btn" id="o-save">&#128190; Save picture</button>
+        </div>
+        <div class="row">
+          <button class="btn big" id="o-again">&#9654; Play again</button>
+          <button class="btn small ghost" id="o-home">&#127968; Home</button>
+        </div>
+        <p class="note" id="o-note"></p>
+      </div>
+    </section>
+  </main>
+
+  <noscript><div class="noscript">Please turn on JavaScript to play Atharv's Snake Clash.</div></noscript>
+
+  <script src="js/config.js"></script>
+  <script src="js/util.js"></script>
+  <script src="js/skins.js"></script>
+  <script src="js/world.js"></script>
+  <script src="js/art.js"></script>
+  <script src="js/fx.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/input.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
