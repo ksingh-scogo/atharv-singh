@@ -26,6 +26,16 @@
     radiusFor: function (m) { return Math.min(SC.CFG.MAX_RADIUS, 9 + 2.1 * Math.sqrt(Math.max(0, m))); },
     segsFor: function (m) { return 10 + Math.floor(2 * Math.sqrt(Math.max(0, m))); },
 
+    // A safe player name: no control or invisible characters, no < > markup characters,
+    // single spaces, at most NAME_MAX letters (counted as whole characters, so emoji are fine).
+    cleanName: function (raw, fallback) {
+      var t = (typeof raw === 'string' || typeof raw === 'number' ? String(raw) : '')
+        .replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u2028-\u202E\u2060-\u206F\uFEFF<>]/g, '')
+        .replace(/\s+/g, ' ').trim();
+      t = Array.from(t).slice(0, SC.CFG.NAME_MAX).join('').trim();
+      return t || (fallback == null ? 'Player' : fallback);
+    },
+
     fmt: function (n) { return String(Math.floor(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); },
 
     mulberry32: function (a) {

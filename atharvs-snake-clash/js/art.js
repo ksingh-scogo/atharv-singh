@@ -65,12 +65,13 @@
     var segs = s.segs, n = segs.length, r = s.radius, skin = s.skin, i, sg, rr;
     if (n < 1) return;
     var step = n > 64 ? 2 : 1;
-    var fancy = skin.tier === 'fancy', shiny = skin.tier === 'shiny';
+    var shineBox = !!(s.fx && s.fx.shine > 0);     // a Super Shine box makes any snake sparkle
+    var fancy = skin.tier === 'fancy', shiny = skin.tier === 'shiny' || shineBox;
 
     // soft glow for shiny / fancy / boss skins
-    if (skin.tier !== 'common') {
-      ctx.globalAlpha = (s.isBoss ? 0.26 : 0.17) + 0.05 * Math.sin(t * 4 + s.id);
-      ctx.strokeStyle = skin.glow; ctx.lineWidth = r * 3.1; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    if (skin.tier !== 'common' || shineBox) {
+      ctx.globalAlpha = (s.isBoss ? 0.26 : shineBox ? 0.3 : 0.17) + 0.05 * Math.sin(t * 4 + s.id);
+      ctx.strokeStyle = shineBox && skin.tier === 'common' ? '#ffe9a0' : skin.glow; ctx.lineWidth = r * 3.1; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
       ctx.beginPath(); ctx.moveTo(segs[0].x, segs[0].y);
       for (i = step; i < n; i += step) ctx.lineTo(segs[i].x, segs[i].y);
       ctx.stroke(); ctx.globalAlpha = 1;
@@ -85,7 +86,7 @@
       ctx.stroke(); ctx.globalAlpha = 1;
     }
 
-    if (s.legged) drawLegs(ctx, s);
+    if (s.hasLegs ? s.hasLegs() : s.legged) drawLegs(ctx, s);
 
     // boss spikes along the back
     if (s.isBoss) {
@@ -155,7 +156,7 @@
     // twinkling sparkles for shiny and fancy snakes
     if (shiny || fancy) {
       ctx.fillStyle = '#fff';
-      var cnt = fancy ? 4 : 3;
+      var cnt = fancy || shineBox ? 4 : 3;
       for (var j = 0; j < cnt; j++) {
         var idx = Math.floor((j * 13 + Math.floor(t * 2.2 + j * 3) * 7 + s.id) % n);
         var ph = (t * 2.2 + j * 3) % 1, size = r * 0.65 * Math.sin(ph * Math.PI);
@@ -222,7 +223,7 @@
       ctx.quadraticCurveTo(sx - r * 0.3, sy + r * 0.05, sx, sy - r * 0.35); ctx.fill();
     }
 
-    if (s.isPlayer && !(opts && opts.noRing)) { // a white ring so you can always find yourself
+    if (s.isMe && !(opts && opts.noRing)) { // a white ring so you can always find yourself
       ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = Math.max(2, r * 0.12);
       ctx.setLineDash([r * 0.5, r * 0.4]);
       ctx.beginPath(); ctx.arc(x, y, hr + r * 0.42, t * 1.5, t * 1.5 + TAU); ctx.stroke();
@@ -261,5 +262,79 @@
     }
   }
 
-  SC.art = { drawBody: drawBody, drawHead: drawHead, drawShield: drawShield, drawEgg: drawEgg, drawCrown: drawCrown, star4: star4 };
+
+  // ---- mystery box: a purple gift box with a question mark ----
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath();
+  }
+  // ttl = seconds left before it vanishes (it blinks in the last few seconds)
+  function drawBox(ctx, b, t, ttl) {
+    var bob = Math.sin(t * 3 + b.ph) * 3, S = 30, x = b.x, y = b.y + bob;
+    if (ttl < 6 && Math.sin(t * 14) > 0.2) ctx.globalAlpha = 0.35;
+    // glow
+    ctx.fillStyle = 'rgba(190,120,255,' + (0.22 + 0.12 * Math.sin(t * 4 + b.ph)) + ')';
+    ctx.beginPath(); ctx.arc(x, y, S * 1.35, 0, TAU); ctx.fill();
+    // shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(x, b.y + S * 0.62, S * 0.5, S * 0.14, 0, 0, TAU); ctx.fill();
+    // box
+    roundRect(ctx, x - S / 2, y - S / 2, S, S, 6);
+    var g = ctx.createLinearGradient(x, y - S / 2, x, y + S / 2); g.addColorStop(0, '#b66bff'); g.addColorStop(1, '#6a2fd6');
+    ctx.fillStyle = g; ctx.fill();
+    ctx.lineWidth = 2.5; ctx.strokeStyle = '#3a1590'; ctx.stroke();
+    // ribbon
+    ctx.fillStyle = '#ffd23f'; ctx.fillRect(x - 3.5, y - S / 2, 7, S);
+    ctx.fillRect(x - S / 2, y - 3.5, S, 7);
+    // bow
+    ctx.beginPath(); ctx.ellipse(x - 6, y - S / 2 - 3, 6, 4, -0.5, 0, TAU); ctx.ellipse(x + 6, y - S / 2 - 3, 6, 4, 0.5, 0, TAU); ctx.fill();
+    // question mark
+    ctx.font = '900 20px "Trebuchet MS", system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 4; ctx.strokeStyle = '#3a1590'; ctx.strokeText('?', x, y + 1);
+    ctx.fillStyle = '#fff'; ctx.fillText('?', x, y + 1); ctx.textBaseline = 'alphabetic';
+    // twinkle
+    ctx.fillStyle = '#fff'; star4(ctx, x + S * 0.62, y - S * 0.6, 4 + 3 * Math.sin(t * 5 + b.ph));
+    ctx.globalAlpha = 1;
+  }
+
+  // ---- little pictures around a snake while a box effect is on ----
+  function drawAura(ctx, s, t) {
+    var fx = s.fx;
+    if (!fx || !s.segs.length) return;
+    var r = s.radius, x = s.segs[0].x, y = s.segs[0].y, a = s.angle, ex = Math.cos(a), ey = Math.sin(a), nx = -ey, ny = ex, i;
+    if (fx.speed > 0) {          // speed lines streaming out behind the head
+      ctx.strokeStyle = '#9dff5c'; ctx.lineWidth = Math.max(2, r * 0.14); ctx.lineCap = 'round';
+      ctx.globalAlpha = 0.55 + 0.3 * Math.sin(t * 20);
+      ctx.beginPath();
+      for (i = -1; i <= 1; i++) {
+        var sx = x - ex * r * 1.6 + nx * r * 0.7 * i, sy = y - ey * r * 1.6 + ny * r * 0.7 * i, L = r * (1.5 + 0.5 * Math.sin(t * 17 + i));
+        ctx.moveTo(sx, sy); ctx.lineTo(sx - ex * L, sy - ey * L);
+      }
+      ctx.stroke(); ctx.globalAlpha = 1;
+    }
+    if (fx.slow > 0) {           // a blue gloomy ring and drips
+      ctx.strokeStyle = 'rgba(110,190,255,0.8)'; ctx.lineWidth = Math.max(2, r * 0.12); ctx.setLineDash([r * 0.3, r * 0.3]);
+      ctx.beginPath(); ctx.arc(x, y, r * 1.5, -t, -t + TAU); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(130,200,255,0.9)';
+      for (i = 0; i < 3; i++) {
+        var f = (t * 0.9 + i / 3) % 1;
+        ctx.beginPath(); ctx.arc(x + (i - 1) * r * 0.9, y - r * 1.3 + f * r * 2.2, r * 0.16, 0, TAU); ctx.fill();
+      }
+    }
+    if (fx.dizzy > 0) {          // stars spinning around the head
+      ctx.fillStyle = '#ffe066';
+      for (i = 0; i < 3; i++) {
+        var ang = t * 5 + i * TAU / 3;
+        star4(ctx, x + Math.cos(ang) * r * 1.6, y - r * 0.9 + Math.sin(ang) * r * 0.55, r * 0.34);
+      }
+    }
+    if (fx.stun > 0) {           // a flash after a blast
+      ctx.globalAlpha = Math.min(1, fx.stun) * 0.6; ctx.strokeStyle = '#ff7a3d'; ctx.lineWidth = Math.max(3, r * 0.3);
+      ctx.beginPath(); ctx.arc(x, y, r * (2.4 - fx.stun), 0, TAU); ctx.stroke(); ctx.globalAlpha = 1;
+    }
+  }
+
+  SC.art = { drawBox: drawBox, drawAura: drawAura, roundRect: roundRect, drawBody: drawBody, drawHead: drawHead, drawShield: drawShield, drawEgg: drawEgg, drawCrown: drawCrown, star4: star4 };
 })(typeof window !== 'undefined' ? window : globalThis);

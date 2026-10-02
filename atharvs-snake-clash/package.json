@@ -1,0 +1,17 @@
+{
+  "name": "atharvs-snake-clash",
+  "version": "2.0.0",
+  "description": "Atharv's Snake Clash: a snake arena game with friends and mystery boxes. Made by Atharv Singh, Podar International School, Nerul.",
+  "private": true,
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "test": "node tests/sim.js && node tests/net.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

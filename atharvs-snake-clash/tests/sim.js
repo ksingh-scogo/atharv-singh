@@ -103,7 +103,7 @@ section('2. Colliding with a regular snake EATS it (head end or tail end)');
     var before = P.mass, eatenEvt = false, fromHead = null;
     for (var t = 0; t < 200; t++) {
       w.update(1 / 30, null);
-      w.events.forEach(function (e) { if (e.type === 'eatStart') fromHead = e.victim.eaten.fromHead; if (e.type === 'eaten') eatenEvt = true; });
+      w.events.forEach(function (e) { if (e.type === 'eatStart') fromHead = w.snakeById(e.victimId).eaten.fromHead; if (e.type === 'eaten') eatenEvt = true; });
       w.events.length = 0;
       if (eatenEvt) break;
     }
@@ -244,7 +244,7 @@ function readyBoss(seed) {
   var defeated = null, done = false;
   for (var i = 0; i < 400 && !done; i++) {
     w.update(1 / 30, null);
-    w.events.forEach(function (e) { if (e.type === 'bossDefeated') defeated = e; if (e.type === 'eaten' && e.victim.isBoss) done = true; });
+    w.events.forEach(function (e) { if (e.type === 'bossDefeated') defeated = e; if (e.type === 'eaten' && e.vBoss) done = true; });
     w.events.length = 0;
   }
   check(P.alive, 'player survives defeating the Boss');
@@ -312,6 +312,207 @@ section('8. Brave mode: a much bigger ordinary snake CAN eat you (and you lose t
   w2.update(1 / 30, null);
   w2.events.forEach(function (e) { if (e.type === 'playerDied') died2 = true; });
   check(!died2 && P2.alive, 'Easy mode: regular snakes never hurt you');
+})();
+
+
+// ------------------------------------------------------------ 9. many players in one arena
+section('9. Many human players share one arena (no limit)');
+function bareWorld(seed) {
+  U.rand = U.mulberry32(seed);
+  var w = new SC.World();
+  w.startAttract();
+  return w;
+}
+function profile(name, extra) { return Object.assign({ name: name, skin: 'leaf', legged: false, difficulty: 'easy' }, extra || {}); }
+function stackOn(a, b) { a.x = b.x; a.y = b.y; a.segs.forEach(function (s) { s.x = a.x; s.y = a.y; }); }
+(function () {
+  var w = bareWorld(91);
+  var a = w.addPlayer('a', profile('Ava')), b = w.addPlayer('b', profile('Ava')), c = w.addPlayer('c', profile('ava'));
+  check(a.name === 'Ava' && b.name === 'Ava 2' && c.name === 'ava 3', 'same names get a number so snakes can be told apart: ' + [a.name, b.name, c.name].join(' | '));
+  check(U.cleanName('  <b>Zoe</b>  ') === 'bZoe/b' && U.cleanName('') === 'Player' && Array.from(U.cleanName('x'.repeat(50))).length === CFG.NAME_MAX, 'names are cleaned and capped at ' + CFG.NAME_MAX);
+
+  // each has their own match
+  [a, b, c].forEach(function (p) { p.snake.shield = 0; });
+  check(a.match !== b.match && a.match.revivesUsed === 0 && b.match.stars === 0, 'every player has their own match (score, revives, bonus points)');
+
+  // friends slide past each other
+  stackOn(b.snake, a.snake); a.snake.mass = 30; b.snake.mass = 20;
+  var ma = a.snake.mass, mb = b.snake.mass;
+  for (var t = 0; t < 10; t++) step(w, 1 / 30);
+  check(a.snake.alive && b.snake.alive && a.snake.mass >= ma && b.snake.mass >= mb, 'friends (not King) pass through each other without harm');
+
+  // the King kills, even when the King is a friend
+  var K = w.king;                                  // the computer King
+  K.mass = 40; K.x = 1500; K.y = 1500; K.segs.forEach(function (sg) { sg.x = 1500; sg.y = 1500; }); K.ai.cool = 999;
+  a.snake.mass = 400; a.snake.radius = U.radiusFor(400); w.kingTimer = 0; step(w, 1 / 30);
+  check(a.snake.isKing && !K.isKing, 'a friend can become King');
+  stackOn(b.snake, a.snake); b.snake.shield = 0; a.snake.shield = 0;
+  var died = null;
+  for (t = 0; t < 5 && !died; t++) { w.update(1 / 30, null); w.events.forEach(function (e) { if (e.type === 'playerDied') died = e; }); w.events.length = 0; }
+  check(died && died.pid === 'b' && died.byFriend && died.byKing, 'a friend who is King eats other players on contact');
+  check(a.snake.alive && a.match.stars === 0 && b.match.stars === 1 && c.match.stars === 0, 'only the eaten player gets the bonus point');
+  check(w.revive('b') && b.snake.alive && b.match.revivesUsed === 1 && a.match.revivesUsed === 0, 'revives are counted per player');
+
+  // leaving
+  var eggs0 = w.eggs.length;
+  w.removePlayer('c');
+  check(!w.slotById.c && w.players.length === 2 && w.eggs.length > eggs0, 'a player who leaves is removed and their snake turns into eggs');
+  step(w, 1 / 30);
+  check(w.snakes.every(function (s) { return s.owner !== 'c'; }), "the leaver's snake is gone");
+
+  // no player limit: 150 friends at once
+  var big = bareWorld(92);
+  for (var i = 0; i < 150; i++) big.addPlayer('p' + i, profile('Friend' + i));
+  check(big.players.length === 150 && big.humans().length === 150, '150 players joined (no cap)');
+  var t0 = Date.now();
+  for (i = 0; i < 90; i++) { big.players.forEach(function (p) { big.setInput(p.id, Math.random() * 6.28 - 3.14); }); big.update(1 / 30); big.events.length = 0; }
+  var ms = (Date.now() - t0) / 90;
+  check(sanity(big, '150 players'), '150 players: world stays sane');
+  check(big.snakes.filter(function (s) { return !s.isPlayer && !s.isBoss; }).length >= CFG.AI_COUNT, 'computer snakes keep topping up');
+  console.log('  150 players + AI: ' + ms.toFixed(1) + ' ms per world update (budget ' + (1000 / CFG.TICK_HZ).toFixed(0) + ' ms)');
+  check(ms < 1000 / CFG.TICK_HZ, 'a 150-player world updates within one server tick');
+})();
+
+(function () {
+  // one shared Boss: any player can wake it; whoever beats it gets the multiplier
+  var w = bareWorld(93);
+  var a = w.addPlayer('a', profile('Ava')), b = w.addPlayer('b', profile('Ben'));
+  a.snake.shield = b.snake.shield = 0;
+  a.snake.mass = CFG.BOSSES[0].trigger + 5;
+  var spawned = false;
+  for (var t = 0; t < 400 && !spawned; t++) { w.update(1 / 30); w.events.forEach(function (e) { if (e.type === 'bossSpawn') spawned = true; }); w.events.length = 0; }
+  check(spawned && w.boss, 'one player reaching the trigger size wakes the Boss for everyone');
+  // Ben is small: the Boss is dangerous for Ben but not for big Ava
+  check(SC.dangerFor(w.boss, b.snake, false) && !SC.dangerFor(w.boss, a.snake, false) === (a.snake.mass >= w.boss.mass), 'danger depends on each player\'s own size');
+  a.snake.mass = w.boss.mass + 5; a.snake.radius = U.radiusFor(a.snake.mass);
+  stackOn(w.boss, a.snake);
+  var won = null;
+  for (t = 0; t < 10 && !won; t++) { w.update(1 / 30); w.events.forEach(function (e) { if (e.type === 'bossDefeated') won = e; }); w.events.length = 0; }
+  check(won && won.pid === 'a' && won.by === 'Ava', 'the player who beat the Boss gets the credit');
+  check(a.match.multiplier === 2 && b.match.multiplier === 1 && w.bossLevel === 2, 'only the winner gets the multiplier; the arena moves on to Boss level 2');
+})();
+
+(function () {
+  // Brave mode is a personal setting: it only affects the player who chose it
+  var w = bareWorld(94);
+  var a = w.addPlayer('a', profile('Ava', { difficulty: 'brave' })), b = w.addPlayer('b', profile('Ben'));
+  a.snake.shield = b.snake.shield = 0;
+  var big = w.snakes.filter(function (s) { return !s.isPlayer && !s.isKing; })[0];
+  big.mass = 200; big.radius = U.radiusFor(200);
+  w.king.mass = 300;
+  check(w.isBigHunterFor(big, a.snake) && !w.isBigHunterFor(big, b.snake), 'a big computer snake is only dangerous to the Brave player');
+  stackOn(a.snake, big); stackOn(b.snake, big);
+  var deaths = [];
+  w.update(1 / 30); w.events.forEach(function (e) { if (e.type === 'playerDied') deaths.push(e.pid); });
+  check(deaths.length === 1 && deaths[0] === 'a', 'the Brave player is eaten, the Easy player is not (' + deaths.join(',') + ')');
+})();
+
+(function () {
+  var w = bareWorld(95), a = w.addPlayer('a', profile('Ava')), b = w.addPlayer('b', profile('Ben'));
+  var lb = w.leaderboard('a', 5);
+  check(lb.rows.length >= 5 && lb.players === 2 && lb.rows.some(function (r) { return r.human; }) || lb.rank > 5, 'leaderboard lists players and computer snakes');
+  check(w.leaderboard('b', 3).rank > 0 && w.leaderboard('a', 3).rank > 0, 'every player gets their own rank');
+  // restart gives a fresh match
+  a.match.score = 99; a.match.revivesUsed = 7;
+  w.restartPlayer('a', profile('Ava'));
+  check(a.match.score === 0 && a.match.revivesUsed === 0 && a.snake.alive, '"play again" starts a fresh match with all 29 revives');
+})();
+
+// ------------------------------------------------------------ 10. mystery boxes
+section('10. Mystery boxes: 4 power-ups, 4 power-downs');
+(function () {
+  var effects = CFG.BOX_EFFECTS;
+  check(effects.length === 8 && effects.filter(function (e) { return e.good; }).length === 4 && effects.filter(function (e) { return !e.good; }).length === 4, '8 effects: 4 good, 4 bad (' + effects.map(function (e) { return e.id; }).join(', ') + ')');
+
+  // boxes appear regularly and disappear if nobody opens them
+  var w = bareWorld(101), P = w.addPlayer('a', profile('Ava', { legged: false })).snake;
+  P.shield = 99;
+  // no computer snakes in this one, so nobody but the (parked) player could open a box
+  w.snakes = w.snakes.filter(function (s) { return s.isPlayer; }); w.aiTarget = function () { return 0; }; w.king = null; w.updateCrown(true);
+  var seen = {}, gone = 0, maxAlive = 0;
+  w.boxes = [];
+  for (var t = 0; t < 30 * 130; t++) {
+    P.x = P.segs[0].x = 1999; P.y = P.segs[0].y = 0;                // parked far from the boxes (not in the way)
+    w.update(1 / 30);
+    w.events.forEach(function (e) { if (e.type === 'boxGone') gone++; });
+    w.events.length = 0;
+    w.boxes.forEach(function (b) { seen[b.id] = 1; });
+    if (w.boxes.length > maxAlive) maxAlive = w.boxes.length;
+  }
+  var spawnedBoxes = Object.keys(seen).length;
+  check(spawnedBoxes >= 15, 'boxes keep appearing: ' + spawnedBoxes + ' in 130 s (about one every ' + CFG.BOX_INTERVAL + ' s)');
+  check(gone >= 8, 'boxes disappear when nobody opens them: ' + gone + ' vanished');
+  check(maxAlive <= CFG.BOX_MAX, 'never more than ' + CFG.BOX_MAX + ' boxes at once (max seen ' + maxAlive + ')');
+  var nearHuman = 0; // a good share appear within a short trip of a player
+  var w2 = bareWorld(102), q = w2.addPlayer('a', profile('Ava')).snake; q.shield = 99;
+  for (t = 0; t < 40; t++) { var bx = w2.spawnBox(); if (Math.hypot(bx.x - q.x, bx.y - q.y) < 1100) nearHuman++; }
+  check(nearHuman >= 15, 'many boxes appear near players so they get found (' + nearHuman + ' of 40)');
+
+  // opening one
+  var w3 = bareWorld(103), A = w3.addPlayer('a', profile('Ava', { legged: false })).snake; A.shield = 99;
+  var box = w3.spawnBox(); box.x = A.x; box.y = A.y;
+  var opened = null; w3.update(1 / 30);
+  w3.events.forEach(function (e) { if (e.type === 'boxOpen') opened = e; });
+  check(opened && opened.pid === 'a' && effects.some(function (e) { return e.id === opened.eff; }) && w3.boxes.indexOf(box) < 0, 'a snake that reaches a box opens it and gets one of the effects (' + (opened && opened.eff) + ')');
+
+  // curious computer snakes go and fetch boxes
+  var w7 = bareWorld(105);
+  w7.snakes = w7.snakes.filter(function (s) { return !s.isKing; }).slice(0, 1); w7.aiTarget = function () { return 1; }; w7.eggs = [];
+  var seeker = w7.snakes[0]; seeker.ai.boxLover = true; seeker.ai.timid = false; seeker.x = 0; seeker.y = 0; seeker.angle = Math.PI;
+  seeker.segs.forEach(function (sg) { sg.x = 0; sg.y = 0; });
+  var far = w7.spawnBox(); far.x = 400; far.y = 0; far.life = 999; w7.boxTimer = 999; w7.king = null; w7.updateCrown(true);
+  var fetched = false;
+  for (t = 0; t < 30 * 8 && !fetched; t++) { w7.update(1 / 30); w7.events.forEach(function (e) { if (e.type === 'boxOpen' && e.sid === seeker.id) fetched = true; }); w7.events.length = 0; w7.eggs = []; }
+  check(fetched, 'a curious computer snake turns around and fetches a box 400 units away');
+
+  // computer snakes can open boxes too, but Bosses can't
+  var w4 = bareWorld(104), ai = w4.snakes.filter(function (s) { return !s.isKing; })[0];
+  var b4 = w4.spawnBox(); b4.x = ai.x; b4.y = ai.y; w4.boxTimer = 99;
+  var aiOpened = null; w4.update(1 / 30); w4.events.forEach(function (e) { if (e.type === 'boxOpen') aiOpened = e; });
+  check(aiOpened && aiOpened.sid === ai.id && aiOpened.pid === 0, 'computer snakes open boxes too');
+  var boss = new SC.Snake({ name: 'B', skin: SC.skins.byId('ruby'), mass: 200, x: 500, y: 500, angle: 0, speed: 0, isBoss: true, bossLevel: 1 });
+  w4.snakes.push(boss); var b5 = w4.spawnBox(); b5.x = 500; b5.y = 500; w4.boxTimer = 99;
+  w4.update(1 / 30);
+  check(w4.boxes.indexOf(b5) >= 0, 'a Boss cannot open a box');
+
+  // the 8 effects, one by one
+  function fresh(legged) { var ww = bareWorld(110), s = ww.addPlayer('a', profile('Ava', { legged: !!legged })).snake; s.shield = 99; s.mass = 100; s.radius = U.radiusFor(100); ww.king.ai.cool = 999; return { w: ww, s: s }; }
+  var base = fresh(false), baseSpeed = base.s.speedNow();
+  var f = fresh(false); f.w.applyEffect(f.s, 'speed');
+  check(Math.abs(f.s.speedNow() / baseSpeed - CFG.FX_SPEED_MUL) < 1e-6, 'Speed Boost: x' + CFG.FX_SPEED_MUL + ' speed');
+  f = fresh(false); f.w.applyEffect(f.s, 'slow');
+  check(Math.abs(f.s.speedNow() / baseSpeed - CFG.FX_SLOW_MUL) < 1e-6, 'Slowpoke: x' + CFG.FX_SLOW_MUL + ' speed');
+  f = fresh(false); f.w.applyEffect(f.s, 'speed'); f.w.applyEffect(f.s, 'slow');
+  check(f.s.fx.speed === 0 && f.s.fx.slow > 0, 'speed boost and slowpoke cancel each other');
+  f = fresh(false); var tr0 = f.s.turnRate(); f.w.applyEffect(f.s, 'legs');
+  check(f.s.hasLegs() && !f.s.legged && f.s.speedNow() > baseSpeed && f.s.turnRate() > tr0, 'Crawly Legs: a legless snake grows legs, runs faster and turns tighter');
+  f = fresh(false); var m0 = f.s.mass; f.w.applyEffect(f.s, 'grow');
+  check(f.s.mass >= m0 * (1 + CFG.FX_GROW) - 1e-6, 'Mega Grow: +' + (CFG.FX_GROW * 100) + '% size (' + m0 + ' -> ' + f.s.mass.toFixed(0) + ')');
+  f = fresh(false); m0 = f.s.mass; var eggs1 = f.w.eggs.length; f.w.applyEffect(f.s, 'shrink');
+  check(Math.abs(f.s.mass - m0 * (1 - CFG.FX_SHRINK)) < 1e-6 && f.w.eggs.length > eggs1, 'Length Reducer: -' + (CFG.FX_SHRINK * 100) + '% size, the lost part becomes eggs');
+  f = fresh(false); m0 = f.s.mass; eggs1 = f.w.eggs.length; f.w.applyEffect(f.s, 'blast');
+  check(Math.abs(f.s.mass - m0 * (1 - CFG.FX_BLAST)) < 1e-6 && f.s.fx.stun > 0 && f.w.eggs.length > eggs1 && f.s.speedNow() < baseSpeed, 'Blast: -' + (CFG.FX_BLAST * 100) + '% size, eggs fly, brief stun');
+  f = fresh(false); f.s.angle = 0; f.s.want = 0.6; f.w.applyEffect(f.s, 'dizzy'); f.w.move(f.s, 0.1);
+  var g = fresh(false); g.s.angle = 0; g.s.want = 0.6; g.w.move(g.s, 0.1);
+  check(g.s.angle > 0 && f.s.angle < 0, 'Dizzy: steering is flipped (normal turns ' + g.s.angle.toFixed(2) + ', dizzy turns ' + f.s.angle.toFixed(2) + ')');
+  // Super Shine pulls eggs from further away
+  f = fresh(false); f.w.eggs = []; var far = f.s.radius * 1.9 + 50;
+  var egg1 = f.w.spawnEgg(f.s.x + far * 1.5, f.s.y, 1, false); var d0 = Math.hypot(egg1.x - f.s.x, egg1.y - f.s.y);
+  f.w.updateEggs(0.1); var dPlain = Math.hypot(egg1.x - f.s.x, egg1.y - f.s.y);
+  f.w.applyEffect(f.s, 'shine'); f.w.updateEggs(0.1); var dShine = Math.hypot(egg1.x - f.s.x, egg1.y - f.s.y);
+  check(dPlain === d0 && dShine < d0, 'Super Shine: eggs are pulled in from twice as far');
+  // can't shrink below the starting size
+  f = fresh(false); f.s.mass = CFG.START_MASS + 1; f.w.applyEffect(f.s, 'blast');
+  check(f.s.mass >= CFG.START_MASS, 'Length Reducer and Blast never go below the starting size');
+  // effects wear off
+  f = fresh(false); f.w.applyEffect(f.s, 'speed'); for (t = 0; t < 30 * 11; t++) f.w.move(f.s, 1 / 30);
+  check(Math.abs(f.s.speedNow() - baseSpeed) < 1e-6, 'timed effects wear off');
+
+  // roughly half good, half bad, and every effect shows up
+  var counts = {}, good = 0, N = 4000, w6 = bareWorld(120), s6 = w6.addPlayer('a', profile('Ava')).snake;
+  for (var i = 0; i < N; i++) { var bb = { id: i, x: 0, y: 0 }; w6.events.length = 0; w6.openBox(s6, bb); var ev = w6.events[0]; counts[ev.eff] = (counts[ev.eff] || 0) + 1; if (ev.good) good++; s6.mass = 100; }
+  check(Object.keys(counts).length === 8 && Object.keys(counts).every(function (k) { return counts[k] > N / 8 * 0.8 && counts[k] < N / 8 * 1.2; }), 'all 8 effects come up about equally often: ' + JSON.stringify(counts));
+  check(good > N * 0.46 && good < N * 0.54, 'about half are good (' + (good / N * 100).toFixed(0) + '%)');
 })();
 
 console.log('\n' + (failures ? failures + ' CHECK(S) FAILED' : 'ALL CHECKS PASSED'));

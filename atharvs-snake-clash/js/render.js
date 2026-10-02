@@ -67,7 +67,7 @@
     return false;
   }
 
-  function rankOf(s) { return s.isPlayer ? 3e6 : s.isBoss ? 2e6 : s.isKing ? 1e6 : s.mass; }
+  function rankOf(s) { return s.isMe ? 4e6 : s.isPlayer ? 3e6 : s.isBoss ? 2e6 : s.isKing ? 1e6 : s.mass; }
 
   Renderer.prototype.draw = function (world, fx, t, ui) {
     var ctx = this.ctx, cam = this.cam, sc = cam.scale, dpr = this.dpr, w = this.w, h = this.h, R = CFG.ARENA_R;
@@ -123,6 +123,22 @@
       art.drawEgg(ctx, e, t);
     }
 
+    // mystery boxes
+    var boxes = world.boxes || [];
+    for (i = 0; i < boxes.length; i++) {
+      var bx = boxes[i];
+      if (bx.x < L - 40 || bx.x > Rt + 40 || bx.y < T - 40 || bx.y > B + 40) continue;
+      art.drawBox(ctx, bx, t, bx.life - (world.time - bx.born));
+    }
+
+    // which snake is mine? (it gets a white ring), and is the Boss scared of me?
+    var me = world.player;
+    for (i = 0; i < world.snakes.length; i++) {
+      s = world.snakes[i];
+      s.isMe = world.localId != null && s.owner === world.localId;
+      if (s.isBoss) s.scared = !!(me && me.alive && me.mass >= s.mass);
+    }
+
     // snakes (small first, so big ones and you are on top)
     var list = world.snakes.slice().sort(function (a, b) { return rankOf(a) - rankOf(b); });
     var shown = [];
@@ -134,6 +150,7 @@
       art.drawBody(ctx, s, t);
       if (!(s.eaten && s.eaten.fromHead)) art.drawHead(ctx, s, t);
       ctx.globalAlpha = 1;
+      art.drawAura(ctx, s, t);
       if (s.shield > 0 && s.isPlayer) art.drawShield(ctx, s, t);
     }
 
@@ -148,16 +165,18 @@
       var p = this.toScreen(s.segs[0].x, s.segs[0].y);
       var lift = (s.radius * 1.25 + (s.isKing ? s.radius * 1.05 + 6 : 0)) * sc + 8;
       var label = s.isBoss ? 'BOSS Lv ' + s.bossLevel + ' · ' + s.name : s.name;
-      ctx.font = '800 ' + (s.isBoss ? 15 : s.isPlayer ? 14 : 12) + 'px ' + FONT;
+      if (s.fx) for (var q = 0; q < CFG.BOX_EFFECTS.length; q++) if (s.fx[CFG.BOX_EFFECTS[q].id] > 0) label += ' ' + CFG.BOX_EFFECTS[q].icon;
+      var friend = s.isPlayer && !s.isMe;
+      ctx.font = '800 ' + (s.isBoss ? 15 : s.isMe ? 14 : friend ? 14 : 12) + 'px ' + FONT;
       ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(20,10,60,0.9)';
       ctx.strokeText(label, p.x, p.y - lift);
-      ctx.fillStyle = s.isBoss ? '#ff9aa8' : s.isPlayer ? '#ffffff' : s.isKing ? '#ffe066' : 'rgba(255,255,255,0.85)';
+      ctx.fillStyle = s.isBoss ? '#ff9aa8' : s.isMe ? '#ffffff' : friend ? '#7fe8ff' : s.isKing ? '#ffe066' : 'rgba(255,255,255,0.85)';
       ctx.fillText(label, p.x, p.y - lift);
     }
 
     if (ui && ui.arrows) {
       var P = world.player;
-      if (world.king && !world.king.isPlayer && world.king.alive && P && P.alive) this.edgeArrow(ctx, world.king, 'king', t, false);
+      if (world.king && world.king !== P && world.king.alive && P && P.alive) this.edgeArrow(ctx, world.king, 'king', t, false);
       if (world.boss && world.boss.alive && !world.boss.eaten) this.edgeArrow(ctx, world.boss, 'boss', t, !!(P && P.alive && P.mass >= world.boss.mass));
     }
 
@@ -211,18 +230,35 @@
     c.strokeStyle = '#ff7ac6'; c.lineWidth = 2; c.stroke();
 
     c.fillStyle = '#ffd23f';
-    for (i = 0; i < world.eggs.length; i++) {
+    var golds = world.goldList;
+    if (golds) for (i = 0; i < golds.length; i++) { c.beginPath(); c.arc(C + golds[i][0] * k, C + golds[i][1] * k, 2, 0, TAU); c.fill(); }
+    else for (i = 0; i < world.eggs.length; i++) {
       var e = world.eggs[i];
       if (e.golden) { c.beginPath(); c.arc(C + e.x * k, C + e.y * k, 2, 0, TAU); c.fill(); }
     }
-    for (i = 0; i < world.snakes.length; i++) {
-      s = world.snakes[i];
-      if (!s.alive || s.isPlayer || s.isKing || s.isBoss) continue;
-      c.fillStyle = SC.skins.baseColor(s.skin);
-      c.beginPath(); c.arc(C + s.x * k, C + s.y * k, 2, 0, TAU); c.fill();
+    // mystery boxes: little purple squares
+    c.fillStyle = '#c77dff';
+    var boxes = world.boxes || [];
+    for (i = 0; i < boxes.length; i++) c.fillRect(C + boxes[i].x * k - 2.5, C + boxes[i].y * k - 2.5, 5, 5);
+
+    var kingId = world.king ? world.king.id : -1, myId = P ? P.id : -2;
+    if (world.mapDots) {            // online: the server tells us where everyone is
+      for (i = 0; i < world.mapDots.length; i++) {
+        var d = world.mapDots[i];     // [x, y, 0 = computer snake / 1 = friend, id]
+        if (d[3] === kingId || d[3] === myId) continue;
+        c.fillStyle = d[2] ? '#7fe8ff' : '#9a8fd8';
+        c.beginPath(); c.arc(C + d[0] * k, C + d[1] * k, d[2] ? 3 : 2, 0, TAU); c.fill();
+      }
+    } else {
+      for (i = 0; i < world.snakes.length; i++) {
+        s = world.snakes[i];
+        if (!s.alive || s.isKing || s.isBoss || s === P) continue;
+        c.fillStyle = s.isPlayer ? '#7fe8ff' : SC.skins.baseColor(s.skin);
+        c.beginPath(); c.arc(C + s.x * k, C + s.y * k, s.isPlayer ? 3 : 2, 0, TAU); c.fill();
+      }
     }
     var K = world.king;
-    if (K && !K.isPlayer && K.alive) {
+    if (K && K !== P && K.alive) {
       c.fillStyle = '#ffd23f'; c.strokeStyle = '#b8860b'; c.lineWidth = 1.5;
       c.beginPath(); c.arc(C + K.x * k, C + K.y * k, 4.5, 0, TAU); c.fill(); c.stroke();
     }
@@ -251,7 +287,7 @@
     var a = Math.atan2(segs[0].y - segs[1].y, segs[0].x - segs[1].x);
     return {
       segs: segs, radius: r, skin: skin, legged: legged, dist: t * 140, angle: a, id: 7, isPlayer: false, isKing: false,
-      isBoss: false, scared: false, eaten: null, dangerous: false
+      isBoss: false, scared: false, eaten: null, dangerous: false, fx: {}, hasLegs: function () { return legged; }
     };
   }
 

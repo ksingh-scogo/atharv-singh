@@ -81,6 +81,11 @@
       for (var i = 0; i < seq.length; i++) tone(seq[i], 0.3, 'triangle', 0.13, null, i * 0.16);
       noise(0.4, 0.14, 5000, 1.5);
     },
+    boxGood: function () { arp([523, 659, 784, 1046, 1319], 0.055, 'triangle', 0.12, 0.2); },
+    boxBad: function () { tone(330, 0.3, 'sawtooth', 0.1, 110); tone(247, 0.35, 'square', 0.06, 90, 0.08); },
+    blast: function () { noise(0.45, 0.2, 700); tone(140, 0.4, 'sawtooth', 0.14, 40); },
+    poof: function () { noise(0.15, 0.06, 2500); },
+    join: function () { arp([659, 784], 0.07, 'sine', 0.07, 0.15); },
     over: function () { arp([392, 330, 262], 0.16, 'triangle', 0.11, 0.3); }
   };
 

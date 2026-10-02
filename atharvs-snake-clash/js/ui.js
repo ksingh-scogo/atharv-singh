@@ -7,7 +7,7 @@
   function $(id) { return doc.getElementById(id); }
 
   var DEFAULTS = {
-    name: 'Atharv', skin: 'sapphire', legged: true, difficulty: 'easy', sfx: true, music: true, seenHow: false,
+    name: '', skin: 'sapphire', legged: true, difficulty: 'easy', sfx: true, music: true, seenHow: false,
     best: 0, bestSize: 0, bestBosses: 0, totalStars: 0, games: 0
   };
   var profile = Object.assign({}, DEFAULTS, SC.store.load());
@@ -17,7 +17,7 @@
     SC.store.save();
   }
 
-  var SCREENS = ['title', 'custom', 'how', 'about', 'pause', 'death', 'over', 'win'];
+  var SCREENS = ['name', 'title', 'custom', 'how', 'about', 'pause', 'death', 'over', 'win', 'lost'];
   var cache = {};
   function setText(id, v) {
     v = String(v);
@@ -77,28 +77,29 @@
       setText('h-stars', m.stars);
       setClass($('h-king'), 'hidden', !(alive && P.isKing));
 
-      // leaderboard: top of the match, and you
-      var list = world.standings(), me = alive ? list.indexOf(P) : -1;
-      if (alive) setText('h-rank', '#' + (me + 1) + '/' + list.length);
-      var n = root.innerWidth < 520 ? 3 : 5, key = '', rows = [], i;
-      for (i = 0; i < Math.min(n, list.length); i++) rows.push({ s: list[i], rank: i + 1 });
-      if (alive && me >= n) rows.push({ s: P, rank: me + 1 });
-      rows.forEach(function (r) { key += r.s.id + ':' + r.s.isKing + ':' + Math.floor(r.s.mass) + ':' + r.rank + ';'; });
+      // friends playing right now
+      var count = world.playerCount();
+      setClass($('h-online'), 'hidden', !(world.online || count > 1));
+      setText('h-players', count);
+
+      // leaderboard: the top of the match, and you
+      var n = root.innerWidth < 520 ? 3 : 5, lb = world.leaderboard(world.localId, n), key = '';
+      if (alive && lb.rank) setText('h-rank', '#' + lb.rank + '/' + lb.total);
+      lb.rows.forEach(function (r) { key += r.id + ':' + r.king + ':' + r.mass + ':' + r.rank + ':' + r.me + ';'; });
       if (cache.board !== key) {
         cache.board = key;
         var ol = $('h-board'); ol.innerHTML = '';
-        rows.forEach(function (r) {
+        lb.rows.forEach(function (r) {
           var li = doc.createElement('li'), a = doc.createElement('span'), b = doc.createElement('b');
-          a.textContent = (r.s.isKing ? '' : r.rank + '. ') + r.s.name; b.textContent = Math.floor(r.s.mass);
+          a.textContent = (r.king ? '' : r.rank + '. ') + r.name; b.textContent = r.mass;
           li.appendChild(a); li.appendChild(b);
-          if (r.s === P) li.className = 'me';
-          if (r.s.isKing) li.className += ' king';
+          li.className = (r.me ? 'me ' : '') + (r.king ? 'king ' : '') + (r.human && !r.me ? 'friend' : '');
           ol.appendChild(li);
         });
       }
 
       // boss bar
-      var bar = $('h-boss'), bossLv = m.bossLevel, B = world.boss, def = CFG.BOSSES[bossLv - 1];
+      var bar = $('h-boss'), bossLv = world.bossLevel, B = world.boss, def = CFG.BOSSES[bossLv - 1];
       if (B && B.alive && !B.eaten) {
         var ready = alive && P.mass >= B.mass;
         bar.className = 'boss-bar ' + (ready ? 'ready' : 'fight');
@@ -113,6 +114,29 @@
       } else {
         bar.className = 'boss-bar hidden';
       }
+
+      UI.updateEffects(alive ? P : null);
+    },
+
+    // chips for the mystery box effects that are on right now, each with a shrinking timer bar
+    updateEffects: function (P) {
+      var box = $('h-fx'), chips = UI._fx = UI._fx || {};
+      CFG.BOX_EFFECTS.forEach(function (def) {
+        var left = P && P.fx ? P.fx[def.id] : 0, c = chips[def.id];
+        if (left > 0 && def.dur > 0) {
+          if (!c) {
+            var el = doc.createElement('div'), ic = doc.createElement('span'), nm = doc.createElement('span'), bar = doc.createElement('span'), fill = doc.createElement('i');
+            el.className = 'fx-chip ' + (def.good ? 'good' : 'bad');
+            ic.className = 'ic'; ic.textContent = def.icon; nm.textContent = def.name; bar.className = 'bar';
+            bar.appendChild(fill); el.appendChild(ic); el.appendChild(nm); el.appendChild(bar); box.appendChild(el);
+            c = chips[def.id] = { el: el, fill: fill };
+          }
+          c.fill.style.width = Math.min(100, left / def.dur * 100) + '%';
+        } else if (c) {
+          if (c.el.parentNode) c.el.parentNode.removeChild(c.el);
+          delete chips[def.id];
+        }
+      });
     },
 
     // ---------------------------------------------------------------- death
@@ -120,6 +144,7 @@
       var left = CFG.MAX_REVIVES - m.revivesUsed;
       var emoji = '👑', title, msg;
       if (info.byBoss) { emoji = '👹'; title = 'The Boss got you!'; msg = info.byName + ' was too big. Get bigger than the Boss, then bump it!'; }
+      else if (info.byKing && info.byFriend) { title = info.byName + ' got you!'; msg = info.byName + ' is the King now, and the King can eat friends too. Grow bigger and take the crown!'; }
       else if (info.byKing) { title = 'The King got you!'; msg = info.byName + ' wears the crown. Stay away from the King!'; }
       else { emoji = '🐍'; title = 'A big snake got you!'; msg = info.byName + ' was much bigger than you.'; }
       if (!info.canRevive) { title = 'That was your last life!'; msg = 'You used all ' + CFG.MAX_REVIVES + ' revives. What a brave snake!'; }
@@ -143,7 +168,7 @@
     // ---------------------------------------------------------------- results + share card
     finalTotal: function (m) { return Math.floor(m.score) + m.stars * CFG.BONUS_STAR_VALUE; },
 
-    showOver: function (m) {
+    showOver: function (m, name) {
       var total = UI.finalTotal(m), newBest = total > profile.best;
       var prevBest = profile.best;
       profile.best = Math.max(profile.best, total);
@@ -152,8 +177,9 @@
       profile.totalStars += m.stars;
       profile.games++;
       saveProfile();
-      UI._last = { m: m, total: total };
-      $('o-title').textContent = m.won ? 'Snake Champion ' + profile.name + '!' : 'Great game, ' + profile.name + '!';
+      var who = name || profile.name || 'Player';
+      UI._last = { m: m, total: total, name: who };
+      $('o-title').textContent = m.won ? 'Snake Champion ' + who + '!' : 'Great game, ' + who + '!';
       $('o-note').textContent = newBest && prevBest > 0 ? 'New best score!' : '';
       $('o-note').className = 'note good';
       $('o-stats').innerHTML = '';
@@ -198,7 +224,7 @@
       c.drawImage(tmp, (W - 960) / 2, 360);
 
       c.fillStyle = '#ffffff'; c.font = '800 44px "Trebuchet MS", system-ui, sans-serif';
-      c.fillText(profile.name + ' scored', W / 2, 660);
+      c.fillText((UI._last && UI._last.name || profile.name) + ' scored', W / 2, 660);
       c.fillStyle = '#ffd23f'; c.font = '900 190px "Trebuchet MS", system-ui, sans-serif';
       c.fillText(U.fmt(total), W / 2, 830);
 
@@ -257,10 +283,46 @@
       root.setTimeout(function () { root.URL.revokeObjectURL(a.href); }, 4000);
     },
 
-    // ---------------------------------------------------------------- title + about
+    // ---------------------------------------------------------------- name box + title + about
+    // Shown every time the game opens, so friends always get to type who they are (the last name is filled in).
+    showName: function () {
+      var inp = $('n-input');
+      inp.value = profile.name || '';
+      setText('n-error', '');
+      UI.show('name');
+      try { inp.focus(); inp.select(); } catch (e) { /* ok */ }
+    },
+    // returns true if a good name was entered
+    submitName: function () {
+      var inp = $('n-input'), raw = inp.value.replace(/[<>]/g, '').trim();
+      if (!raw) {
+        setText('n-error', 'Please type your name first!');
+        inp.classList.remove('shake'); void inp.offsetWidth; inp.classList.add('shake');
+        try { inp.focus(); } catch (e) { /* ok */ }
+        return false;
+      }
+      profile.name = U.cleanName(raw);
+      saveProfile();
+      return true;
+    },
     refreshTitle: function () {
       $('t-best').textContent = profile.best > 0 ? 'Your best score: ' + U.fmt(profile.best) : '';
+      $('t-name').textContent = profile.name || 'Player';
       UI.refreshToggles();
+    },
+    // 'checking' | 'online' | 'solo'
+    setServer: function (state, count) {
+      var st = $('t-status'), play = $('b-play'), solo = $('b-solo');
+      st.classList.toggle('on', state === 'online');
+      if (state === 'online') {
+        st.textContent = count > 0 ? count + (count === 1 ? ' player is' : ' players are') + ' in the arena now. Join them!' : 'The arena is open. Be the first!';
+        play.textContent = '\u25B6 PLAY WITH FRIENDS';
+        solo.classList.remove('hidden');
+      } else {
+        st.textContent = state === 'checking' ? 'Looking for friends...' : 'Playing on your own. Friends can join when the game runs on a game server.';
+        play.textContent = '\u25B6 PLAY';
+        solo.classList.add('hidden');
+      }
     },
     refreshToggles: function () {
       ['t-sfx', 'p-sfx'].forEach(function (id) { setClass($(id), 'off', !profile.sfx); });
@@ -304,7 +366,7 @@
         profile.name = this.value.replace(/[<>]/g, '').slice(0, 12); saveProfile();
       });
       $('c-name').addEventListener('blur', function () {
-        profile.name = profile.name.trim() || 'Atharv'; this.value = profile.name; saveProfile();
+        profile.name = profile.name.trim() || 'Player'; this.value = profile.name; saveProfile();
       });
     },
     syncCustomize: function () {
@@ -323,9 +385,11 @@
       { art: ['👆', '🖱️', '⌨️'], title: 'Steer your snake', text: 'Drag your finger, move the mouse, or use the arrow keys.' },
       { art: ['🥚', '✨', '🥚'], title: 'Eat eggs to grow', text: 'Golden eggs give you a bubble shield!' },
       { art: ['🐍', '➡️', '😋'], title: 'Bump snakes to eat them', text: 'Regular snakes are yummy. Go get them!' },
+      { art: ['🎁', '❓', '✨'], title: 'Open mystery boxes!', text: 'Purple boxes give a surprise. Some are super, some are silly: speed, legs, shine, blasts and more!' },
       { art: ['👑', '😱', '⚠️'], title: 'Beware of the King!', text: 'The biggest snake wears the crown and can eat YOU. Follow the gold arrow to see where it is.' },
       { art: ['👹', '➡️', '🏆'], title: 'Beat the Boss!', text: 'Get bigger than the Boss, then bump it. You win a score multiplier!' },
-      { art: ['❤️', '⭐', '❤️'], title: 'You get 29 revives', text: 'Eaten? You get a bonus point and can try again!' }
+      { art: ['❤️', '⭐', '❤️'], title: 'You get 29 revives', text: 'Eaten? You get a bonus point and can try again!' },
+      { art: ['👋', '🐍', '👋'], title: 'Playing with friends?', text: 'Friends have blue names. You slide past each other, but whoever is King can eat everyone!' }
     ],
     how: { i: 0, then: null },
     startHow: function (then) {

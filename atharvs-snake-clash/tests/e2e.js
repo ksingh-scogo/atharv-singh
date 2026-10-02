@@ -23,13 +23,29 @@ function check(cond, msg) { if (!cond) { failures++; console.log('  FAIL: ' + ms
     K.x = P.x; K.y = P.y; K.segs.forEach(s => { s.x = K.x; s.y = K.y; });
   });
 
-  console.log('Title + branding');
+  console.log('The name box comes first');
   await page.goto(PAGE_URL);
   await page.waitForTimeout(500);
+  check(await ev(() => document.getElementById('s-name').classList.contains('active')), 'the "What\'s your name?" box opens first');
+  check((await ev(() => document.getElementById('n-input').value)) === '', 'on a first visit the box is empty');
+  check(await ev(() => document.activeElement && document.activeElement.id === 'n-input'), 'the cursor is already in the box');
+  await page.click('#n-go');
+  check((await ev(() => document.getElementById('n-error').textContent)).length > 0 && await ev(() => document.getElementById('s-name').classList.contains('active')), 'an empty name is not accepted');
+  await page.fill('#n-input', '  <b>Atharv</b>  ');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(200);
+  const typed = await ev(() => SC.game.profile.name);
+  check(!/[<>]/.test(typed) && typed.includes('Atharv'), 'markup characters are stripped from names (' + typed + ')');
+  await page.click('#b-rename'); await page.fill('#n-input', 'Atharv'); await page.click('#n-go');
+  check((await ev(() => SC.game.profile.name)) === 'Atharv', 'the name can be changed from the title screen');
+
+  console.log('Title + branding');
   const titleText = await ev(() => document.getElementById('s-title').innerText);
   check(/Atharv's\s+Snake Clash/i.test(titleText), 'title shows "Atharv\'s Snake Clash"');
   check(titleText.includes('Made by Atharv Singh, Podar International School, Nerul'), 'title shows the credit line');
   check(/Atharv Singh presents/i.test(titleText), 'title says "Atharv Singh presents"');
+  check(titleText.includes('Playing as') && titleText.includes('Atharv'), 'title says who is playing');
+  check(/on your own/i.test(await ev(() => document.getElementById('t-status').textContent)), 'with no game server (opened as a file) it says you play on your own');
 
   console.log('About screen');
   await page.click('#b-about');
@@ -46,6 +62,8 @@ function check(cond, msg) { if (!cond) { failures++; console.log('  FAIL: ' + ms
   await page.click('#c-done');
   await page.reload();
   await page.waitForTimeout(400);
+  check((await ev(() => document.getElementById('n-input').value)) === 'Atharv S', 'after a reload the name box asks again, with the last name filled in');
+  await page.click('#n-go');
   const saved = await ev(() => ({ n: SC.game.profile.name, s: SC.game.profile.skin, l: SC.game.profile.legged, d: SC.game.profile.difficulty }));
   check(saved.n === 'Atharv S' && saved.s === 'gold' && saved.l === false && saved.d === 'brave', 'name, skin, legs and difficulty survive a reload: ' + JSON.stringify(saved));
   // back to defaults for the rest
@@ -58,8 +76,10 @@ function check(cond, msg) { if (!cond) { failures++; console.log('  FAIL: ' + ms
   console.log('First play shows the tutorial, then the match starts');
   await page.click('#b-play');
   check(await ev(() => document.getElementById('s-how').classList.contains('active')), 'tutorial opens on first play');
-  for (let i = 0; i < 6; i++) await page.click('#how-next');
+  let slides = 0;
+  while (await ev(() => document.getElementById('s-how').classList.contains('active')) && slides < 15) { await page.click('#how-next'); slides++; }
   await page.waitForTimeout(300);
+  check(slides >= 7, 'the picture tutorial has ' + slides + ' short slides');
   check((await ev(() => SC.game.state)) === 'playing', 'match is playing');
   check((await ev(() => document.getElementById('h-rev').textContent)) === '29/29', 'HUD shows "Revives left: 29/29"');
   check(await ev(() => document.body.innerText.includes('Podar International School, Nerul')), 'school badge is on the game screen');
@@ -72,6 +92,27 @@ function check(cond, msg) { if (!cond) { failures++; console.log('  FAIL: ' + ms
     return bad;
   });
   check(sfxErrors.length === 0, 'all sound effects ran (' + (sfxErrors.join('; ') || 'no errors') + ')');
+
+  console.log('Mystery boxes: toast, effect chips, drawing');
+  await ev(() => { const w = SC.game.world, P = w.player; P.shield = 99; w.boxes = []; w.snakes.forEach(s => { if (!s.isPlayer) s.ai.boxLover = false; }); const b = w.spawnBox(); b.x = P.x; b.y = P.y; });
+  await page.waitForTimeout(500);
+  check(/!/.test(await ev(() => document.getElementById('toast').innerText)) && (await ev(() => SC.game.world.boxes.length)) >= 0, 'opening a box pops up a message');
+  for (const id of ['speed', 'shine', 'legs']) {
+    await ev((id) => SC.game.world.applyEffect(SC.game.world.player, id), id);
+    await page.waitForTimeout(350);
+  }
+  const chips = await ev(() => document.getElementById('h-fx').innerText);
+  check(/Speed Boost/.test(chips) && /Super Shine/.test(chips) && /Crawly Legs/.test(chips), 'active power-ups show as chips with timers: ' + chips.replace(/\n/g, ' | '));
+  check(await ev(() => document.querySelectorAll('#h-fx .fx-chip.good').length === 3), 'power-ups are green');
+  await ev(() => SC.game.world.applyEffect(SC.game.world.player, 'slow'));
+  await ev(() => SC.game.world.applyEffect(SC.game.world.player, 'dizzy'));
+  await page.waitForTimeout(350);
+  check(await ev(() => document.querySelectorAll('#h-fx .fx-chip.bad').length === 2 && !/Speed Boost/.test(document.getElementById('h-fx').innerText)), 'power-downs are red, and Slowpoke cancels Speed Boost');
+  await ev(() => { const P = SC.game.world.player; P.fx.slow = 0.05; P.fx.dizzy = 0.05; P.fx.shine = 0.05; P.fx.legs = 0.05; });
+  await page.waitForTimeout(500);
+  check(await ev(() => document.querySelectorAll('#h-fx .fx-chip').length === 0), 'chips disappear when the effects wear off');
+  await ev(() => { const w = SC.game.world; w.boxes = []; for (let i = 0; i < 4; i++) w.spawnBox(); });
+  await page.waitForTimeout(300);
 
   console.log('Steering with keyboard');
   await page.keyboard.down('ArrowUp'); await page.waitForTimeout(700); await page.keyboard.up('ArrowUp');
@@ -123,7 +164,7 @@ function check(cond, msg) { if (!cond) { failures++; console.log('  FAIL: ' + ms
   console.log('Boss defeat -> multiplier -> Champion screen');
   await page.click('#o-again'); await page.waitForTimeout(300);
   check((await ev(() => SC.game.world.match.revivesUsed)) === 0, 'play again: fresh 29 revives');
-  await ev(() => { const m = SC.game.world.match; m.bossLevel = 5; SC.game.world.player.mass = 1500; SC.game.world.player.shield = 0; });
+  await ev(() => { SC.game.world.bossLevel = 5; SC.game.world.player.mass = 1500; SC.game.world.player.shield = 0; });
   await page.waitForTimeout(400);
   const champ = await ev(async () => {
     const w = SC.game.world, P = w.player;

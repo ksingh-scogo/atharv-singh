@@ -52,6 +52,42 @@
     AI_MASS_CAP: 260,
     KING_MASS_CAP: 300,
 
+    // ---- Mystery boxes ----
+    BOX_FIRST: 2.5,         // the first box shows up after this many seconds
+    BOX_INTERVAL: 5,        // then a new one about this often...
+    BOX_LIFE: 30,           // ...and each vanishes after this long if nobody opens it
+    BOX_MAX: 8,             // boxes in the arena at once
+    BOX_REACH: 20,          // how close a snake's mouth must get to open one
+    // Four power-ups (good) and four power-downs (bad). Every box gives one at random.
+    BOX_EFFECTS: [
+      { id: 'speed',  good: true,  icon: '\u26A1',     name: 'Speed Boost',     dur: 10, text: 'Super fast!' },
+      { id: 'shine',  good: true,  icon: '\u2728',     name: 'Super Shine',     dur: 15, text: 'Shiny! Eggs fly to you!' },
+      { id: 'legs',   good: true,  icon: '\uD83E\uDDB6', name: 'Crawly Legs',  dur: 20, text: 'Legs! Faster and tighter turns!' },
+      { id: 'grow',   good: true,  icon: '\uD83C\uDF31', name: 'Mega Grow',    dur: 0,  text: 'You grew bigger!' },
+      { id: 'slow',   good: false, icon: '\uD83D\uDC0C', name: 'Slowpoke',     dur: 8,  text: 'Oh no, so slow...' },
+      { id: 'shrink', good: false, icon: '\u2702\uFE0F', name: 'Length Reducer', dur: 0, text: 'Your tail got shorter!' },
+      { id: 'blast',  good: false, icon: '\uD83D\uDCA5', name: 'Blast!',       dur: 0,  text: 'BOOM! You lost some size!' },
+      { id: 'dizzy',  good: false, icon: '\uD83D\uDE35', name: 'Dizzy',        dur: 6,  text: 'Steering is flipped!' }
+    ],
+    FX_SPEED_MUL: 1.4,      // Speed Boost
+    FX_SLOW_MUL: 0.55,      // Slowpoke
+    FX_STUN_MUL: 0.3,       // right after a Blast
+    FX_STUN_TIME: 1.2,
+    FX_GROW: 0.2,           // Mega Grow: +20% size (at least +8)
+    FX_SHRINK: 0.25,        // Length Reducer: -25% size
+    FX_BLAST: 0.35,         // Blast: -35% size
+    FX_MAGNET_MUL: 2.0,     // Super Shine: eggs are pulled in from twice as far
+
+    // ---- Multiplayer ----
+    NAME_MAX: 12,           // longest player name
+    TICK_HZ: 30,            // server world updates per second
+    SNAP_HZ: 15,            // snapshots sent to each player per second
+    VIEW_RANGE: 1700,       // players are told about things this close to them
+    AI_PER_PLAYER: 0.5,     // each friend adds half a computer snake (more to eat)...
+    AI_EXTRA_MAX: 18,       // ...up to this many extra
+    EGGS_PER_PLAYER: 12,    // and a dozen more eggs, up to EGGS_EXTRA_MAX
+    EGGS_EXTRA_MAX: 300,
+
     // ---- King ----
     KING_SWITCH: 1.04,      // a challenger must be 4% bigger to take the crown
     KING_SEED_MASS: [70, 90],

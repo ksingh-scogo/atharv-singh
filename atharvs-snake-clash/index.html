@@ -23,6 +23,7 @@
           <div class="chip"><span class="lbl">Rank</span> <b id="h-rank">#1</b></div>
         </div>
         <div id="h-king" class="chip king-chip hidden">You are the KING!</div>
+        <div id="h-fx"></div>
       </div>
       <div class="hud-right">
         <div class="btns">
@@ -45,6 +46,7 @@
     <div class="hud-bottom">
       <canvas id="minimap" width="132" height="132" aria-label="Map"></canvas>
       <div class="hud-br">
+        <div class="chip online hidden" id="h-online">&#128101; <b id="h-players">1</b> playing</div>
         <div class="chip lives"><span class="heart">&#10084;&#65039;</span> Revives left: <b id="h-rev">29/29</b></div>
         <div class="chip stars"><span class="star">&#11088;</span> Bonus points: <b id="h-stars">0</b></div>
         <div class="school-badge">Podar International School, Nerul</div>
@@ -55,12 +57,28 @@
   <!-- ============ Screens ============ -->
   <main id="ui">
 
-    <section id="s-title" class="screen active">
+    <section id="s-name" class="screen active">
+      <div class="card">
+        <div class="presents">Atharv Singh presents</div>
+        <h1 class="logo small"><span class="l1">Atharv's</span><span class="l2">Snake Clash</span></h1>
+        <h2>What's your name?</h2>
+        <p>Your friends will see it above your snake.</p>
+        <input id="n-input" class="name-input" maxlength="12" autocomplete="off" autocapitalize="words" spellcheck="false" placeholder="Type your name" aria-label="Your name">
+        <div class="note bad" id="n-error"></div>
+        <button class="btn big" id="n-go">Let's go! &#9654;</button>
+        <p class="credit">Made by Atharv Singh, Podar International School, Nerul</p>
+      </div>
+    </section>
+
+    <section id="s-title" class="screen">
       <div class="card title-card">
         <div class="presents">Atharv Singh presents</div>
         <h1 class="logo"><span class="l1">Atharv's</span><span class="l2">Snake Clash</span></h1>
         <canvas id="t-snake" width="420" height="120" aria-hidden="true"></canvas>
+        <div class="who" id="t-who">Playing as <b id="t-name"></b> <button class="link" id="b-rename">change</button></div>
         <button class="btn big" id="b-play">&#9654; PLAY</button>
+        <div class="server-status" id="t-status">Checking for friends...</div>
+        <button class="link hidden" id="b-solo">or play on your own</button>
         <div class="row">
           <button class="btn small" id="b-custom">&#127912; My Snake</button>
           <button class="btn small" id="b-how">&#10067; How to Play</button>
@@ -128,7 +146,8 @@
 
     <section id="s-pause" class="screen">
       <div class="card">
-        <h2>Paused</h2>
+        <h2 id="p-title">Paused</h2>
+        <p class="note" id="p-note"></p>
         <button class="btn big" id="p-resume">&#9654; Keep playing</button>
         <div class="row">
           <button class="btn small" id="p-restart">&#128260; Restart</button>
@@ -166,6 +185,19 @@
       </div>
     </section>
 
+    <section id="s-lost" class="screen">
+      <div class="card">
+        <div class="big-emoji">&#128268;</div>
+        <h2 id="l-title">Lost the connection</h2>
+        <p id="l-msg">The game server stopped answering.</p>
+        <button class="btn big" id="l-retry">&#128260; Try again</button>
+        <div class="row">
+          <button class="btn small" id="l-solo">Play on my own</button>
+          <button class="btn small ghost" id="l-home">&#127968; Home</button>
+        </div>
+      </div>
+    </section>
+
     <section id="s-over" class="screen">
       <div class="card wide">
         <h2 id="o-title">Great game!</h2>
@@ -195,6 +227,8 @@
   <script src="js/fx.js"></script>
   <script src="js/audio.js"></script>
   <script src="js/input.js"></script>
+  <script src="js/mirror.js"></script>
+  <script src="js/net.js"></script>
   <script src="js/render.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/main.js"></script>
